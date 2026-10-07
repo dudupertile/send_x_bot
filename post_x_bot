@@ -1,0 +1,103 @@
+import tweepy
+import time
+import random
+from datetime import datetime
+
+# 1. Credenciais da API do X
+API_KEY = ""
+API_SECRET = ""
+BEARER_TOKEN = ""
+ACCESS_TOKEN = "-"
+ACCESS_TOKEN_SECRET = ""
+
+# 2. Configurações da Conta e Palavras-Chave
+NOME_DE_USUARIO = "seu_usuario"
+PALAVRAS_CHAVE = ["lula", "flavio", "flávio"]
+
+# Lista corrigida com vírgulas em todas as linhas
+OPCOES_DE_MENSAGEM = [
+    "Confira mais informações e detalhes oficiais aqui: https://meli.la/1Ci5bP4",
+    "Veja essa atualização importante sobre o assunto: https://meli.la/25Ymzbm",
+    "Para quem está acompanhando, vale a pena dar uma olhada: https://meli.la/34h1AET",
+    "Acesse o link oficial para conferir os detalhes: https://meli.la/15HYNw2",
+    "Acesse o link oficial para conferir os detalhes: https://meli.la/2RbxUKo",
+    "Acesse o link oficial para conferir os detalhes: https://meli.la/2Ju5ijg",
+    "Acesse o link oficial para conferir os detalhes: https://meli.la/2XdrDmq",
+    "Acesse o link oficial para conferir os detalhes: https://meli.la/1fZeRpB"
+]
+
+client = tweepy.Client(
+    bearer_token=BEARER_TOKEN,
+    consumer_key=API_KEY,
+    consumer_secret=API_SECRET,
+    access_token=ACCESS_TOKEN,
+    access_token_secret=ACCESS_TOKEN_SECRET
+)
+
+posts_respondidos = set()
+ultima_mensagem_enviada = ""
+
+
+def obter_meu_user_id():
+    user = client.get_user(username=NOME_DE_USUARIO)
+    return user.data.id
+
+
+def obter_mensagem_unica():
+    global ultima_mensagem_enviada
+    # Garante que não repita a mesma frase consecutivamente
+    opcoes_disponiveis = [m for m in OPCOES_DE_MENSAGEM if m != ultima_mensagem_enviada]
+    mensagem_base = random.choice(opcoes_disponiveis)
+
+    # Adiciona o horário atual para impedir a trava de conteúdo duplicado da API do X
+    hora_atual = datetime.now().strftime("%H:%M")
+    mensagem_final = f"{mensagem_base} [{hora_atual}]"
+
+    ultima_mensagem_enviada = mensagem_base
+    return mensagem_final
+
+
+def monitorar_timeline_e_postar(meu_id):
+    print("Verificando posts da timeline...")
+    try:
+        timeline = client.get_home_timeline(
+            max_results=10,
+            tweet_fields=["author_id", "text"]
+        )
+
+        if not timeline.data:
+            print("Nenhum post recente encontrado na timeline.")
+            return
+
+        for tweet in timeline.data:
+            tweet_id = tweet.id
+            autor_id = tweet.author_id
+            texto = tweet.text.lower()
+
+            if autor_id == meu_id:
+                continue
+
+            mencionou_palavra = any(palavra in texto for palavra in PALAVRAS_CHAVE)
+
+            if mencionou_palavra and tweet_id not in posts_respondidos:
+                print(f"Assunto detectado no post {tweet_id}. Publicando novo tweet no seu perfil...")
+
+                mensagem = obter_mensagem_unica()
+
+                client.create_tweet(text=mensagem)
+
+                posts_respondidos.add(tweet_id)
+                time.sleep(10)
+
+    except Exception as e:
+        print(f"Erro no monitoramento: {e}")
+
+
+if __name__ == "__main__":
+    meu_id = obter_meu_user_id()
+    print(f"Bot ativo para a conta @{NOME_DE_USUARIO} (ID: {meu_id})")
+
+    while True:
+        monitorar_timeline_e_postar(meu_id)
+        print("Aguardando 180 segundos...\n")
+        time.sleep(180)
